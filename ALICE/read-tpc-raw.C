@@ -36,14 +36,14 @@
 #include "TGrid.h"
 #include <cstdlib>
 #include <iostream>
+#include <iomanip>
 #include <memory>
 using namespace std;
-
-const int maxSampleLength=1024;
 
 void read_tpc_raw()
 {
   const int maxEvent=-1;
+  const int maxChannelLength=1024;
   int fileCount=0;
   TGrid* pGrid=NULL;
   TString line;
@@ -51,17 +51,27 @@ void read_tpc_raw()
   Int_t DDLNumber=-1;
   Int_t HWAddress=-1;
   Int_t RCUId=-1;
-  Int_t SampleLength=maxSampleLength;
-  Int_t Samples[maxSampleLength];
-  Int_t SampleDiffs[maxSampleLength];
+  Int_t ChannelLength=maxChannelLength;
+  Int_t Signals[maxChannelLength];
+  Int_t SignalDiffs[maxChannelLength];
 
-  TTree *tpcrawstat = new TTree("tpcrawstat","TPC RAW statistics");
-  tpcrawstat->Branch("DDLNumber"    ,&DDLNumber    ,"DDLNumber/I");
-  tpcrawstat->Branch("HWAddress"    ,&HWAddress    ,"HWAddress/I");
-  tpcrawstat->Branch("RCUId"        ,&RCUId        ,"RCUId/I");
-  tpcrawstat->Branch("SampleLength" ,&SampleLength ,"SampleLength/I");
-  tpcrawstat->Branch("Samples"      ,Samples       ,"Samples[SampleLength]/i");
-  tpcrawstat->Branch("SampleDiffs"  ,SampleDiffs   ,"SampleDiffs[SampleLength]/i");
+  TTree *tpcrawstat = NULL;
+  /// It seems, the tree-approach is not suitable for such an
+  /// amount of data, the processing hangs when saving the tree
+  // tpcrawstat=new TTree("tpcrawstat","TPC RAW statistics");
+  if (tpcrawstat) {
+    tpcrawstat->Branch("DDLNumber"    ,&DDLNumber    ,"DDLNumber/I");
+    tpcrawstat->Branch("HWAddress"    ,&HWAddress    ,"HWAddress/I");
+    tpcrawstat->Branch("RCUId"        ,&RCUId        ,"RCUId/I");
+    tpcrawstat->Branch("ChannelLength",&ChannelLength,"ChannelLength/I");
+    tpcrawstat->Branch("Signals"      ,Signals       ,"Signals[ChannelLength]/i");
+    tpcrawstat->Branch("SignalDiffs"  ,SignalDiffs   ,"SignalDiffs[ChannelLength]/i");
+  }
+
+  TH1* hSignalDiff=NULL;
+  Int_t binMargin=50; // some margin on both sides of the signal distribution
+  Int_t nBins=2*(maxChannelLength+binMargin)+1;
+  hSignalDiff=new TH1D("hSignalDiff", "Differences in TPC RAW signal", nBins, -nBins/2, nBins/2);
 
   line.ReadLine(cin);
   while (cin.good()) {
@@ -87,15 +97,18 @@ void read_tpc_raw()
 	  altrorawstream->SelectRawData("TPC");
     	  while (altrorawstream->NextDDL()) {
     	    DDLNumber=altrorawstream->GetDDLNumber();
-	    cout << " reading event " << eventCount << "  DDL " << DDLNumber << endl;
+	    cout << " reading event " << std::setw(4) << eventCount
+		 << "  DDL " << std::setw(4) << DDLNumber
+		 << " (" << line << ")"
+		 << endl;
     	    while (altrorawstream->NextChannel()) {
     	      HWAddress=altrorawstream->GetHWAddress();
-    	      memset(Samples, 0, maxSampleLength*sizeof(Int_t));
-    	      memset(SampleDiffs, 0, maxSampleLength*sizeof(Int_t));
+    	      memset(Signals, 0, maxChannelLength*sizeof(Int_t));
+    	      memset(SignalDiffs, 0, maxChannelLength*sizeof(Int_t));
     	      Int_t lastSignal=0;
     	      if (!altrorawstream->IsChannelBad()) {
     	    	while (altrorawstream->NextBunch()) {
-    	    	  // process all sample values of the bunch and set the
+    	    	  // process all signal values of the bunch and set the
     	    	  // according time bins in the buffer
     	    	  Int_t startTime=altrorawstream->GetStartTimeBin();
     	    	  Int_t bunchLength=altrorawstream->GetBunchLength();
@@ -109,23 +122,30 @@ void read_tpc_raw()
     	    	  //      << endl;
     	    	  for (; i<bunchLength; i++) {
 		    int timeBin=startTime-i;
-    	    	    //if (timeBin>=maxSampleLength) continue;
-    	    	    Samples[timeBin]=signals[i];
-    	    	    SampleDiffs[timeBin]=Samples[timeBin];
-    	    	    if (timeBin<maxSampleLength) {
-    	    	      SampleDiffs[timeBin]-=Samples[timeBin+1];
+    	    	    //if (timeBin>=maxChannelLength) continue;
+    	    	    Signals[timeBin]=signals[i];
+    	    	    SignalDiffs[timeBin]=Signals[timeBin];
+    	    	    if (timeBin<maxChannelLength) {
+    	    	      SignalDiffs[timeBin]-=Signals[timeBin+1];
     	    	    }
     	    	  } // end of bunch signal loop
     	    	  // we are now behind the bunch, have to set the difference
-    	    	  // value in the first bin of the gap, where the sample value
+    	    	  // value in the first bin of the gap, where the signal value
     	    	  // is assumed to be zero again
     	    	  if (startTime-i>=0) {
-    	    	    SampleDiffs[startTime-i]=-Samples[startTime-i+1];
+    	    	    SignalDiffs[startTime-i]=-Signals[startTime-i+1];
     	    	  }
     	    	} // end of bunch loop
     	      } // masked bad channel
 	      //	      cout << "   DDL " << DDLNumber << "  Channel " << HWAddress << endl;
-	      tpcrawstat->Fill();
+	      if (tpcrawstat) {
+		tpcrawstat->Fill();
+	      }
+	      if (hSignalDiff) {
+		for (int i=0; i<maxChannelLength; i++) {
+		  hSignalDiff->Fill(SignalDiffs[i], 1);
+		}
+	      }
     	    } // end of channel loop
     	  } // end of ddl loop
 	  cout << "finished event " << eventCount << endl;
@@ -138,8 +158,6 @@ void read_tpc_raw()
       altrorawstream=NULL;
     }
     line.ReadLine(cin);
-    cout << line << endl;
-    break;
   }
 
   cout << " total " << fileCount << " file(s) " << endl;
@@ -152,8 +170,13 @@ void read_tpc_raw()
   }
 
   of->cd();
-  tpcrawstat->Print();
-  tpcrawstat->Write();
+  if (tpcrawstat) {
+    tpcrawstat->Print();
+    tpcrawstat->Write();
+  }
+  if (hSignalDiff) {
+    hSignalDiff->Write();
+  }
   of->Close();
 }
 #endif
