@@ -26,6 +26,7 @@
 
 #include "AliRawReader.h"
 #include "AliAltroRawStreamV3.h"
+#include "AliHLTHuffman.h"
 #include "TTree.h"
 #include "TFile.h"
 #include "TString.h"
@@ -43,8 +44,15 @@ using namespace std;
 void read_tpc_raw()
 {
   const int maxEvent=-1;
+  const int huffmanBitLength=10;
+  const char* huffmanDecoderName="TPCRawSignalDifference";
+  TString htfn=huffmanDecoderName;
+  htfn+="_HuffmanTable.root";
+  const int maxValue=0x1<<huffmanBitLength;
   const int maxChannelLength=1024;
+  const bool bRunHuffmanTraining=false;
   int fileCount=0;
+  int rangeErrorCount=0;
   TGrid* pGrid=NULL;
   TString line;
   TString targetFileName("tpc-raw-statistics.root");
@@ -72,6 +80,34 @@ void read_tpc_raw()
   Int_t binMargin=50; // some margin on both sides of the signal distribution
   Int_t nBins=2*(maxChannelLength+binMargin)+1;
   hSignalDiff=new TH1D("hSignalDiff", "Differences in TPC RAW signal", nBins, -nBins/2, nBins/2);
+  hSignalDiff->GetXaxis()->SetTitle("Signal(n+1) - Signal(n)");
+  hSignalDiff->GetYaxis()->SetTitle("counts");
+  hSignalDiff->GetYaxis()->SetTitleOffset(1.4);
+  TH1* hFactor=new TH1F("hFactor", "Huffman Compression for TPC Raw Signal Differences per Channel", 400, 0., 4.);
+  hFactor->GetXaxis()->SetTitle("Compression factor (original bitlegth/compressed bitlength)");
+  hFactor->GetYaxis()->SetTitle("counts");
+  hFactor->GetYaxis()->SetTitleOffset(1.4);
+
+  // when storing differences, the actual difference value needs to be shifted
+  // by the available value range, thus resulting in 1 bit more to be stored
+  AliHLTHuffman* pHuffman=NULL;
+  if (bRunHuffmanTraining) {
+    pHuffman=new AliHLTHuffman(huffmanDecoderName, huffmanBitLength+1);
+  } else {
+    TFile* htf=TFile::Open(htfn);
+    if (!htf || htf->IsZombie()) {
+      cerr << "can not open file " << htfn << endl;
+      return;
+    }
+
+    TObject* obj=NULL;
+    htf->GetObject("TPCRawSignalDifference", obj);
+    if (obj==NULL) {
+      cout << "can not load Huffman decoder object " << huffmanDecoderName << " from file " << htfn << endl;
+      return;
+    }
+    pHuffman=(AliHLTHuffman*)obj;
+  }
 
   line.ReadLine(cin);
   while (cin.good()) {
@@ -141,9 +177,33 @@ void read_tpc_raw()
 	      if (tpcrawstat) {
 		tpcrawstat->Fill();
 	      }
-	      if (hSignalDiff) {
+ 	      {
+		Int_t bitcount=0;
 		for (int i=0; i<maxChannelLength; i++) {
-		  hSignalDiff->Fill(SignalDiffs[i], 1);
+		  if (hSignalDiff) {
+		    hSignalDiff->Fill(SignalDiffs[i], 1);
+		  }
+		  if (pHuffman) {
+		    Int_t value=SignalDiffs[i]+maxValue;
+		    if (value>=0 && value<2*maxValue) {
+		      if (bRunHuffmanTraining) {
+			AliHLTUInt64_t v = value;
+			pHuffman->AddTrainingValue(v);
+		      } else {
+			AliHLTUInt64_t length = 0;
+			AliHLTUInt64_t v = value;
+			pHuffman->Encode(v, length);
+			bitcount+=length;
+		      }
+		    } else {
+		      rangeErrorCount++;
+		    }
+		  }
+		}
+		if (bitcount>0) {
+		  float factor=maxChannelLength*huffmanBitLength;
+		  factor/=bitcount;
+		  hFactor->Fill(factor);
 		}
 	      }
     	    } // end of channel loop
@@ -163,6 +223,23 @@ void read_tpc_raw()
   cout << " total " << fileCount << " file(s) " << endl;
   // TODO: create statistics from the total equipment size of the TPC
 
+  if (rangeErrorCount>0) {
+    cerr << "ERROR: " << rangeErrorCount << " range under/overflow(s)" << endl;
+  }
+  if (pHuffman && bRunHuffmanTraining) {
+    pHuffman->GenerateHuffmanTree();
+    pHuffman->Print();
+    TFile* htf=TFile::Open(htfn, "RECREATE");
+    if (!htf || htf->IsZombie()) {
+      cerr << "can not open file " << htfn << endl;
+      return;
+    }
+
+    htf->cd();
+    pHuffman->Write();
+    htf->Close();
+  }
+
   TFile* of=TFile::Open(targetFileName, "RECREATE");
   if (!of || of->IsZombie()) {
     cerr << "can not open file " << targetFileName << endl;
@@ -176,6 +253,7 @@ void read_tpc_raw()
   }
   if (hSignalDiff) {
     hSignalDiff->Write();
+    hFactor->Write();
   }
   of->Close();
 }
