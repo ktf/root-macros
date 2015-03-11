@@ -327,20 +327,26 @@ void read_tpc_raw()
 		  }
 		}
 		if (bitcount>0) {
-		  bitcount+=(40-bitcount%40); // align to 40 bit altro format
-		  float factor=maxChannelLength*signalBitLength;
-		  factor/=bitcount;
-		  hFactor->Fill(factor);
+		  if (hFactor) {
+		    bitcount+=(40-bitcount%40); // align to 40 bit altro format
+		    float factor=maxChannelLength*signalBitLength;
+		    factor/=bitcount;
+		    hFactor->Fill(factor);
+		  }
 
-		  bitcountCutoff+=(40-bitcountCutoff%40); // align to 40 bit altro format
-		  float factorCutoff=maxChannelLength*signalBitLength;
-		  factorCutoff/=bitcountCutoff;
-		  hFactorCutoff->Fill(factorCutoff);
+		  if (hFactorCutoff) {
+		    bitcountCutoff+=(40-bitcountCutoff%40); // align to 40 bit altro format
+		    float factorCutoff=maxChannelLength*signalBitLength;
+		    factorCutoff/=bitcountCutoff;
+		    hFactorCutoff->Fill(factorCutoff);
+		  }
 
-		  channelWordCount+=(4-channelWordCount%4); // align to groupd of 4 10bit words
-		  factor=channelWordCount*signalBitLength;
-		  factor/=bitcount;
-		  hFactorAltro->Fill(factor);
+		  if (hFactorAltro) {
+		    channelWordCount+=(4-channelWordCount%4); // align to groupd of 4 10bit words
+		    float factor=channelWordCount*signalBitLength;
+		    factor/=bitcount;
+		    hFactorAltro->Fill(factor);
+		  }
 		}
 
 		if (sampleChannelCandidate && channelMaxSignal>sampleMaxSignal) {
