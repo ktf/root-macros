@@ -64,6 +64,15 @@ public:
   }
 
 private:
+  int writeString(const char* data, unsigned size, char* cb(unsigned)) {
+    char* buffer=cb(size+1);
+    if (buffer) {
+      strncpy(buffer, data, size);
+    } else {
+      std::cout << "Worker: no buffer provided by host" << std::endl;
+    }
+  }
+
   callback_signal_t m_cbsignal;
 
 };
