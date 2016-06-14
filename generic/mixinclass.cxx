@@ -9,8 +9,16 @@
 
 #include <iostream>
 
+class Interface {
+public:
+Interface() {}
+~Interface() {}
+
+virtual void print() = 0;
+};
+
 template<typename T>
-struct BaseFunctionality
+struct BaseFunctionality : public Interface
 {
   typedef T value_type;
   value_type value;
@@ -21,43 +29,44 @@ struct BaseFunctionality
   }
 };
 
-template <typename BASE, typename T = typename BASE::value_type>
+template <typename BASE>
 struct dec : public BASE
 {
-  typedef T value_type;
+  typedef typename BASE::value_type value_type;
   void print() {
     std::cout << "The decimal functionality" << std::endl;
     BASE::print();
   }
 };
 
-template <typename BASE, typename T = typename BASE::value_type>
+template <typename BASE>
 struct hex : public BASE
 {
-  typedef T value_type;
+  typedef typename BASE::value_type value_type;
   void print() {
     std::cout << "The hexadecimal functionality" << std::endl;
     BASE::print();
   }
 };
 
-template <typename BASE, typename T = typename BASE::value_type>
+template <typename BASE>
 struct oct : public BASE
 {
-  typedef T value_type;
+  typedef typename BASE::value_type value_type;
   void print() {
     std::cout << "The octal functionality" << std::endl;
     BASE::print();
   }
 };
 
+typedef BaseFunctionality<int> IntFunctionality;
 
 int main()
 {
-  hex<BaseFunctionality<int> > plainhex;
-  oct< hex<BaseFunctionality<int> > > octhex;
-  oct< dec< hex<BaseFunctionality<int> > > > octdechex;
-  oct< dec< oct<BaseFunctionality<int> > > > octdecoct;
+  hex<IntFunctionality > plainhex;
+  oct< hex<IntFunctionality > > octhex;
+  oct< dec< hex<IntFunctionality > > > octdechex;
+  oct< dec< oct<IntFunctionality > > > octdecoct;
 
   std::cout << "==============================" << std::endl;
   plainhex.print();
