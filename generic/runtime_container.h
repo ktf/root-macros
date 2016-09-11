@@ -31,6 +31,9 @@
 #include <boost/mpl/lambda.hpp>
 #include <boost/mpl/vector.hpp>
 #include <boost/mpl/push_back.hpp>
+#include <boost/mpl/protect.hpp>
+
+using namespace boost::mpl::placeholders;
 
 /**
  * @class RuntimeContainer
@@ -106,6 +109,8 @@ struct rc_mixin : public BASE
   T mMember;
 };
 
+typedef typename boost::mpl::lambda< rc_mixin<_1, _2> >::type apply_rc_mixin;
+
 /**
  * @brief check the mixin level to be below specified level
  *
@@ -116,9 +121,6 @@ template< typename T, typename N > struct rtc_less
 
 template< typename T, typename N > struct rtc_equal
 : boost::mpl::bool_<boost::mpl::equal<typename T::wrapped_type, N>::type> {};
-
-using boost::mpl::placeholders::_1;
-using boost::mpl::placeholders::_2;
 
 /**
  * @brief create the runtime container
@@ -134,7 +136,7 @@ struct  create_rtc
   , Base
   , boost::mpl::if_<
       rtc_less<_1, N >
-      , boost::mpl::apply2< boost::mpl::first<_2>, _1, boost::mpl::second<_2> >
+      , boost::mpl::apply2< boost::mpl::protect<apply_rc_mixin>::type, _1, boost::mpl::second<_2> >
       , boost::mpl::identity<_1>
       >
     >::type
