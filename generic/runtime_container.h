@@ -125,18 +125,18 @@ template< typename T, typename N > struct rtc_equal
 /**
  * @brief create the runtime container
  *
- * Usage: typedef create_rtc<map, base>::type container;
+ * Usage: typedef create_rtc<types, base>::type container;
  */
-template<typename Map, typename Base, typename N = boost::mpl::size<Map>>
+template<typename Types, typename Base, typename N = boost::mpl::size<Types>>
 struct  create_rtc
 {
   typedef typename boost::mpl::lambda<
   typename boost::mpl::fold<
-  Map
+  Types
   , Base
   , boost::mpl::if_<
       rtc_less<_1, N >
-      , boost::mpl::apply2< boost::mpl::protect<apply_rc_mixin>::type, _1, boost::mpl::second<_2> >
+      , boost::mpl::apply2< boost::mpl::protect<apply_rc_mixin>::type, _1, _2 >
       , boost::mpl::identity<_1>
       >
     >::type
@@ -146,15 +146,15 @@ struct  create_rtc
 /**
  * @brief create a vector of mixin types
  *
- * Usage: typedef create_rtc_type_map<map, base>::type container_types;
+ * Usage: typedef create_rtc_types<types, base>::type container_types;
  */
-template<typename Map, typename Base, typename N = boost::mpl::size<Map>>
+template<typename Types, typename Base, typename N = boost::mpl::size<Types>>
 struct create_rtc_types
 {
   typedef typename boost::mpl::fold<
     boost::mpl::range_c<int, 0, N::value>
     , boost::mpl::vector< >
-    , boost::mpl::push_back<_1, create_rtc<Map , Base , boost::mpl::plus<_2, boost::mpl::int_<1>>>>
+    , boost::mpl::push_back<_1, create_rtc<Types , Base , boost::mpl::plus<_2, boost::mpl::int_<1>>>>
     >::type type;
 };
 

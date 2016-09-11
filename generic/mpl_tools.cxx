@@ -51,17 +51,17 @@ int main()
 
   ////////////////////////////////////////////////////////////////////////////////
 
-  typedef boost::mpl::map<
-    boost::mpl::pair<rc_mixin<_1, _2>, int>,
-    boost::mpl::pair<rc_mixin<_1, _2>, char>,
-    boost::mpl::pair<rc_mixin<_1, _2>, unsigned int>,
-    boost::mpl::pair<rc_mixin<_1, _2>, float>
-    > mixinmap;
+  typedef boost::mpl::vector<
+    int
+    , char
+    , unsigned int
+    , float
+    > types;
 
   ////////////////////////////////////////////////////////////////////////////////
   std::cout << "testing composite mixing: " << std::endl;
   typedef rc_base<int> Base_t;
-  typedef create_rtc< mixinmap, Base_t >::type mixin_t;
+  typedef create_rtc< types, Base_t >::type mixin_t;
   mixin_t mixin;
   mixin.print();
 
@@ -84,7 +84,7 @@ int main()
   // rtc_less checks for 'level less than condition_level-1', if 2 is given
   // as condition here, fold applies the mixin first on the base which has level
   // -1 and then on the first mixin stage which has level 0
-  typedef create_rtc< mixinmap, Base_t, condition2 >::type mixin2_t;
+  typedef create_rtc< types, Base_t, condition2 >::type mixin2_t;
 
   mixin2_t mixin2;
   mixin2.print();
