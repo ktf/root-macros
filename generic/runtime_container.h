@@ -26,6 +26,11 @@
 // properties.
 
 #include <iostream>
+#include <boost/mpl/equal.hpp>
+#include <boost/mpl/fold.hpp>
+#include <boost/mpl/lambda.hpp>
+#include <boost/mpl/vector.hpp>
+#include <boost/mpl/push_back.hpp>
 
 /**
  * @class RuntimeContainer
@@ -62,6 +67,7 @@ struct rc_base : public RuntimeContainer
 {
   typedef T value_type;
   typedef boost::mpl::int_<-1> level;
+  typedef boost::mpl::vector<>::type  mixin_types;
   value_type value;
   void set(value_type v) { value = v; }
   value_type get() const { return value; }
@@ -85,8 +91,13 @@ struct rc_mixin : public BASE
 {
   rc_mixin() : mMember(0) {mMember-=214.5;}
   typedef typename BASE::value_type value_type;
+  /// each stage of the mixin class wraps one type
   typedef T wrapped_type;
+  /// this is the self type
   typedef rc_mixin<BASE, wrapped_type> mixin_type;
+  /// a vector of all mixin stage types so far
+  typedef typename boost::mpl::push_back<typename BASE::mixin_types, mixin_type>::type mixin_types;
+  /// increment the level counter
   typedef typename boost::mpl::plus< typename BASE::level, boost::mpl::int_<1> >::type level;
   void print() {
     std::cout << "RC mixin level " << level::value << ": " << mMember << std::endl;
@@ -102,5 +113,47 @@ struct rc_mixin : public BASE
  */
 template< typename T, typename N > struct rtc_less
 : boost::mpl::bool_<(T::level::value < boost::mpl::minus<N, boost::mpl::int_<1>>::value) > {};
+
+template< typename T, typename N > struct rtc_equal
+: boost::mpl::bool_<boost::mpl::equal<typename T::wrapped_type, N>::type> {};
+
+using boost::mpl::placeholders::_1;
+using boost::mpl::placeholders::_2;
+
+/**
+ * @brief create the runtime container
+ *
+ * Usage: typedef create_rtc<map, base>::type container;
+ */
+template<typename Map, typename Base, typename N = boost::mpl::size<Map>>
+struct  create_rtc
+{
+  typedef typename boost::mpl::lambda<
+  typename boost::mpl::fold<
+  Map
+  , Base
+  , boost::mpl::if_<
+      rtc_less<_1, N >
+      , boost::mpl::apply2< boost::mpl::first<_2>, _1, boost::mpl::second<_2> >
+      , boost::mpl::identity<_1>
+      >
+    >::type
+  >::type type;
+};
+
+/**
+ * @brief create a vector of mixin types
+ *
+ * Usage: typedef create_rtc_type_map<map, base>::type container_types;
+ */
+template<typename Map, typename Base, typename N = boost::mpl::size<Map>>
+struct create_rtc_types
+{
+  typedef typename boost::mpl::fold<
+    boost::mpl::range_c<int, 0, N::value>
+    , boost::mpl::vector< >
+    , boost::mpl::push_back<_1, create_rtc<Map , Base , boost::mpl::plus<_2, boost::mpl::int_<1>>>>
+    >::type type;
+};
 
 #endif
