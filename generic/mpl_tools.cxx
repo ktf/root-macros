@@ -16,8 +16,6 @@ struct int_minus : boost::mpl::int_<( N1::value - N2::value )> {};
 using boost::mpl::placeholders::_1;
 using boost::mpl::placeholders::_2;
 
-
-
 int main()
 {
   ////////////////////////////////////////////////////////////////////////////////
@@ -44,17 +42,49 @@ int main()
     boost::mpl::pair<rc_mixin<_1, _2>, char>,
     boost::mpl::pair<rc_mixin<_1, _2>, unsigned int>,
     boost::mpl::pair<rc_mixin<_1, _2>, float>
-  > map;
+    > mixinmap;
 
   typedef rc_base<int> Base_t;
   typedef typename
     boost::mpl::fold<
-      map,
-      Base_t,
+    mixinmap,
+    Base_t,
     boost::mpl::apply2< boost::mpl::first<_2>, _1, boost::mpl::second<_2> >
     >::type mixin_t;
 
   std::cout << "testing composite mixing: " << std::endl;
   mixin_t mixin;
   mixin.print();
+
+  std::cout << std::endl << "checking rtc_less meta function" << std::endl;
+  typedef boost::mpl::int_<2> condition2;
+  typedef boost::mpl::int_<3> condition3;
+  typedef boost::mpl::int_<5> condition5;
+  std::cout << "has less then " << condition3::value << " entries? " << (rtc_less<mixin_t, condition3>::value?"yes":"no") << std::endl;
+  std::cout << "has less then " << condition5::value << " entries? " << (rtc_less<mixin_t, condition5>::value?"yes":"no") << std::endl;
+
+  std::cout << std::endl << "reduced mixin, reduced to " << condition2::value << " elements" << std::endl;
+  // the mixin base is labeled -1, the mixin stages are labeled from 0 to n-1
+  // rtc_less checks for 'level less than condition_level-1', if 2 is given
+  // as condition here, fold applies the mixin first on the base which has level
+  // -1 and then on the first mixin stage which has level 0
+  typedef typename
+    boost::mpl::fold<
+    mixinmap
+    , Base_t
+    , boost::mpl::if_<
+      rtc_less<_1, condition2 >
+      , boost::mpl::apply2< boost::mpl::first<_2>, _1, boost::mpl::second<_2> >
+      , boost::mpl::identity<_1>
+      >
+    >::type mixin2_t;
+
+  mixin2_t mixin2;
+  mixin2.print();
+
+  // the cast to a certain level in the mixing works only as desired as
+  // long as there is no virtual inheritence
+  std::cout << std::endl << "checking cast of full mixin to reduced type" << std::endl;
+  mixin2_t& ref=static_cast<mixin2_t&>(mixin);
+  ref.print();
 }
