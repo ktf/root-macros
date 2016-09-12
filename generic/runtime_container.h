@@ -14,18 +14,19 @@
 //* any purpose. It is provided "as is" without express or implied warranty. *
 //****************************************************************************
 
-//  @file   Runtime_Container.h
+//  @file   runtime_container.h
 //  @author Matthias Richter
 //  @since  2015-09-11
-//  @brief  Demonstrator for a runtime container for a compile time sequence
+//  @brief  A general runtime container for a compile time sequence
 
-// Demonstrator for a runtime container for a compile time sequence
+// A general runtime container for a compile time sequence
 // of types. A mixin class is used to represent a member of each data
 // type. Every data type in the sequence describes a mixin on top of
 // the previous one. The runtime container accumulates the type
 // properties.
 
 #include <iostream>
+#include <iomanip>
 #include <boost/mpl/equal.hpp>
 #include <boost/mpl/fold.hpp>
 #include <boost/mpl/lambda.hpp>
@@ -36,46 +37,93 @@
 using namespace boost::mpl::placeholders;
 
 /**
- * @class RuntimeContainer
- * @brief A runtime container for a compile time sequence of data types
+ * @class DefaultInterface
+ * @brief The default interface for the RuntimeContainer
  *
  * The common interface for the mixin class. In order to allow entry
  * points to the different levels of the mixin, none of the interface
  * functions has to be declared virtual. The function implementation of
  * the top most mixin would be called otherwise.
  */
-class RuntimeContainer
+class DefaultInterface
 {
 public:
-  RuntimeContainer() {}
-  ~RuntimeContainer() {}
+  DefaultInterface() {}
+  ~DefaultInterface() {}
 
   void print() const {}
 };
 
 /**
- * @class rc_base The base for the mixin class
+ * @brief Default initializer does nothing
+ */
+struct default_initializer
+{
+  template<typename T>
+  void operator()(T&) {}
+};
+
+/**
+ * @brief An initializer for simple types
+ * The initializer makes use of truncation for non-float types, and
+ * over- and underflow to produce different values in the member
+ * of the individual stages in the container.
+ * - float types keep the fraction
+ * - integral types truncate the fraction
+ * - unsigned types undergo an underflow and produce big numbers
+ * - 8 bit char produces the '*' character
+ */
+struct funny_initializer
+{
+  template<typename T>
+  void operator()(T& v) {v=0; v-=214.5;}
+};
+
+/**
+ * @brief Default printer prints nothing
+ */
+struct default_printer
+{
+  template<typename T>
+  void operator()(const T& v, int level = -1) {}
+};
+
+/**
+ * @brief Verbose printer prints level and content
+ */
+struct verbose_printer
+{
+  template<typename T>
+  void operator()(const T& v, int level = -1) {
+    std::cout << "RC mixin level "
+              << std::setw(2)
+              << level << ": " << v << std::endl;
+  }
+};
+
+/**
+ * @class RuntimeContainer The base for the mixin class
  * @brief the technical base of the mixin class
  *
  * The class is necessary to provide the innermost functionality of the
- * mixin. The template parameter is purely theoretically and not used
- * at all for the functionality. Its a placeholder if a templated
- * version is needed at some point.
+ * mixin.
  *
  * The level of the mixin is encoded in the type 'level' which is
  * incremented in each mixin stage.
  */
-template<typename T>
-struct rc_base : public RuntimeContainer
+template<typename InterfacePolicy = DefaultInterface
+  , typename InitializerPolicy = default_initializer
+  , typename PrinterPolicy = default_printer>
+struct RuntimeContainer : public InterfacePolicy
 {
-  typedef T value_type;
+  InitializerPolicy _initializer;
+  PrinterPolicy     _printer;
   typedef boost::mpl::int_<-1> level;
-  typedef boost::mpl::vector<>::type  mixin_types;
-  value_type value;
-  void set(value_type v) { value = v; }
-  value_type get() const { return value; }
+  typedef boost::mpl::vector<>::type  types;
+
   void print() {
-    std::cout << "RC base" << std::endl;
+    const char* string = "base";
+    _printer(string, level::value);
   }
 };
 
@@ -84,7 +132,7 @@ struct rc_base : public RuntimeContainer
  * @brief Mixin component is used with different data types
  *
  * Each mixin component has a member of the specified type, as a simple
- * trick this member is initialised with 0 and then a negative float number
+ * trick this member is initialized with 0 and then a negative float number
  * is subtracted. The fraction will be cut off for integral types, for
  * unsigned numbers there will be range wrap. For an 8 bit char it gives
  * the character '*'
@@ -92,18 +140,18 @@ struct rc_base : public RuntimeContainer
 template <typename BASE, typename T>
 struct rc_mixin : public BASE
 {
-  rc_mixin() : mMember(0) {mMember-=214.5;}
-  typedef typename BASE::value_type value_type;
+  rc_mixin() : mMember(0) {BASE::_initializer(mMember);}
+
   /// each stage of the mixin class wraps one type
   typedef T wrapped_type;
   /// this is the self type
   typedef rc_mixin<BASE, wrapped_type> mixin_type;
   /// a vector of all mixin stage types so far
-  typedef typename boost::mpl::push_back<typename BASE::mixin_types, mixin_type>::type mixin_types;
+  typedef typename boost::mpl::push_back<typename BASE::types, mixin_type>::type types;
   /// increment the level counter
   typedef typename boost::mpl::plus< typename BASE::level, boost::mpl::int_<1> >::type level;
   void print() {
-    std::cout << "RC mixin level " << level::value << ": " << mMember << std::endl;
+    BASE::_printer(mMember, level::value);
     BASE::print();
   }
   T mMember;

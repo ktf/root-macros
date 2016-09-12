@@ -22,7 +22,7 @@ struct int_minus : boost::mpl::int_<( N1::value - N2::value )> {};
 using boost::mpl::placeholders::_1;
 using boost::mpl::placeholders::_2;
 
-struct print_mixing {
+struct print_container {
   template<typename T>
   void operator()(T t) {
     std::cout << "--------------------------" << std::endl;
@@ -59,41 +59,41 @@ int main()
     > types;
 
   ////////////////////////////////////////////////////////////////////////////////
-  std::cout << "testing composite mixing: " << std::endl;
-  typedef rc_base<int> Base_t;
-  typedef create_rtc< types, Base_t >::type mixin_t;
-  mixin_t mixin;
-  mixin.print();
+  std::cout << "testing composite container: " << std::endl;
+  typedef RuntimeContainer<DefaultInterface, funny_initializer, verbose_printer> ContainerBase_t;
+  typedef create_rtc< types, ContainerBase_t >::type Container_t;
+  Container_t container;
+  container.print();
 
   std::cout << std::endl << "checking rtc_less meta function" << std::endl;
   typedef boost::mpl::int_<2> condition2;
   typedef boost::mpl::int_<3> condition3;
   typedef boost::mpl::int_<5> condition5;
-  std::cout << "has less then " << condition3::value << " entries? " << (rtc_less<mixin_t, condition3>::value?"yes":"no") << std::endl;
-  std::cout << "has less then " << condition5::value << " entries? " << (rtc_less<mixin_t, condition5>::value?"yes":"no") << std::endl;
+  std::cout << "has less then " << condition3::value << " entries? " << (rtc_less<Container_t, condition3>::value?"yes":"no") << std::endl;
+  std::cout << "has less then " << condition5::value << " entries? " << (rtc_less<Container_t, condition5>::value?"yes":"no") << std::endl;
 
   ////////////////////////////////////////////////////////////////////////////////
-  std::cout << std::endl << "checking vector of mixin types" << std::endl;
+  std::cout << std::endl << "checking vector of container types" << std::endl;
 
 
-  boost::mpl::for_each<mixin_t::mixin_types>(print_mixing());
+  boost::mpl::for_each<Container_t::types>(print_container());
 
   ////////////////////////////////////////////////////////////////////////////////
-  std::cout << std::endl << "reduced mixin, reduced to " << condition2::value << " elements" << std::endl;
+  std::cout << std::endl << "reduced container, reduced to " << condition2::value << " elements" << std::endl;
   // the mixin base is labeled -1, the mixin stages are labeled from 0 to n-1
   // rtc_less checks for 'level less than condition_level-1', if 2 is given
   // as condition here, fold applies the mixin first on the base which has level
   // -1 and then on the first mixin stage which has level 0
-  typedef create_rtc< types, Base_t, condition2 >::type mixin2_t;
+  typedef create_rtc< types, ContainerBase_t, condition2 >::type container2_t;
 
-  mixin2_t mixin2;
-  mixin2.print();
+  container2_t container2;
+  container2.print();
 
   ////////////////////////////////////////////////////////////////////////////////
-  // the cast to a certain level in the mixing works only as desired as
-  // long as there is no virtual inheritence
-  std::cout << std::endl << "checking cast of full mixin to reduced type" << std::endl;
-  auto& ref=static_cast<boost::mpl::at_c<mixin_t::mixin_types, 1>::type&>(mixin);
+  // the cast to a certain level in the mixin works only as desired as
+  // long as there is no virtual inheritance
+  std::cout << std::endl << "checking cast of full container to reduced type" << std::endl;
+  auto& ref=static_cast<boost::mpl::at_c<Container_t::types, 1>::type&>(container);
   ref.print();
 
 }
