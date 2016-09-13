@@ -1,4 +1,4 @@
-// g++ --std=c++11 -g -ggdb -I$BOOST_ROOT/include -o mpl_tools mpl_tools.cxx
+// g++ --std=c++11 -g -ggdb -I$BOOST_ROOT/include -o test_runtime_container test_runtime_container.cxx
 
 #include <iostream>
 #include <boost/mpl/size.hpp>
