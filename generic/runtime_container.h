@@ -33,6 +33,10 @@
 #include <boost/mpl/vector.hpp>
 #include <boost/mpl/push_back.hpp>
 #include <boost/mpl/protect.hpp>
+#include <boost/mpl/begin.hpp>
+#include <boost/mpl/end.hpp>
+#include <boost/mpl/next.hpp>
+#include <boost/mpl/deref.hpp>
 
 using namespace boost::mpl::placeholders;
 
@@ -102,6 +106,108 @@ struct verbose_printer
 };
 
 /**
+ * @brief Setter functor, forwards to the container mixin's set function
+ */
+template<typename U>
+class set_value {
+public:
+  typedef void return_type;
+  typedef U value_type;
+
+  set_value(U u) : mValue(u) {}
+  template<typename T>
+  return_type operator()(T& t) {
+    return t.set(mValue);
+  }
+
+private:
+  set_value(); // forbidden
+  U mValue;
+};
+
+/**
+ * @brief Getter functor, forwards to the container mixin's get function
+ */
+template<typename U>
+class get_value {
+public:
+  typedef U return_type;
+  typedef U value_type;
+
+  template<typename T>
+  return_type operator()(T& t) {
+    return t.get();
+  }
+};
+
+
+/******************************************************************************
+ * @brief apply functor to the wrapped member object in the runtime container
+ * This meta function recurses through the list while incrementing the index
+ * and calls the functor at the required position
+ *
+ * @note internal meta function for the RuntimeContainers' apply function
+ */
+template <
+  typename _ContainerT  // container type
+  , typename _IndexT    // data type of position index
+  , typename _Iterator  // current iterator position
+  , typename _End       // end iterator position
+  , _IndexT  _Index     // current index
+  , typename F          // functor
+  >
+struct rc_apply_at
+{
+  static typename F::return_type apply( _ContainerT& c, _IndexT position, F f )
+  {
+    if ( position == _Index ) {
+      // this is the queried position, make the type cast to the current
+      // stage of the runtime container and execute function for it.
+      // Terminate loop by forwarding _End as _Iterator and thus
+      // calling the specialization
+      typedef typename boost::mpl::deref< _Iterator >::type stagetype;
+      stagetype& stage = static_cast<stagetype&>(c);
+      return f(stage);
+    } else {
+      // go to next element
+      return rc_apply_at<
+	_ContainerT
+        , _IndexT
+        , typename boost::mpl::next< _Iterator >::type
+        , _End
+        , _Index + 1
+        , F
+        >::apply( c, position, f );
+    }
+  }
+};
+// specialization: end of recursive loop, kicks in if _Iterator matches
+// _End.
+// here we end up if the position parameter is out of bounds
+template <
+  typename _ContainerT  // container type
+  , typename _IndexT    // data type of position index
+  , typename _End       // end iterator position
+  , _IndexT  _Index     // current index
+  , typename F          // functor
+  >
+struct rc_apply_at<_ContainerT
+		   , _IndexT
+		   , _End
+		   , _End
+		   , _Index
+		   , F
+		   >
+{
+  static typename F::return_type apply( _ContainerT& c, _IndexT position, F f )
+  {
+    // TODO: this is probably the place to through an exeption because
+    // we are out of bound
+    return typename F::return_type(0);
+  }
+};
+
+/**
  * @class RuntimeContainer The base for the mixin class
  * @brief the technical base of the mixin class
  *
@@ -125,6 +231,12 @@ struct RuntimeContainer : public InterfacePolicy
     const char* string = "base";
     _printer(string, level::value);
   }
+
+  // not yet clear if we need the setter and getter in the base class
+  // at least wrapped_type is not defined in the base
+  //void set(wrapped_type) {mMember = v;}
+  //wrapped_type get() const {return mMember;}
+
 };
 
 /**
@@ -154,6 +266,25 @@ struct rc_mixin : public BASE
     BASE::_printer(mMember, level::value);
     BASE::print();
   }
+
+  /// set member wrapped object
+  void set(wrapped_type v) {mMember = v;}
+  /// get wrapped object
+  wrapped_type get() const {return mMember;}
+
+  /// apply functor to the runtime object at index
+  template<typename F>
+  typename F::return_type apply(int index, F f) {
+    return rc_apply_at<
+      mixin_type
+      , int
+      , typename boost::mpl::begin<types>::type
+      , typename boost::mpl::end<types>::type
+      , 0
+      , F
+      >::apply(*this, index, f);
+  }
+
   T mMember;
 };
 
