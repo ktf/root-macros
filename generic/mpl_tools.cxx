@@ -96,4 +96,14 @@ int main()
   auto& ref=static_cast<boost::mpl::at_c<Container_t::types, 1>::type&>(container);
   ref.print();
 
+  std::cout << std::endl << "testing runtime container setter (float, set to 42.5 + i)" << std::endl;
+  for (int i = 0; i < boost::mpl::size<types>::value; i++) {
+    container.apply(i, set_value<float>(42.5 + i));
+  }
+  container.print();
+  std::cout << std::endl << "testing runtime container getter (float)" << std::endl;
+  for (int i = 0; i < boost::mpl::size<types>::value; i++) {
+    std::cout << "reading container at level " << i << ": "
+	      <<container.apply(i, get_value<float>()) << std::endl;
+  }
 }
