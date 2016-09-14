@@ -1,6 +1,7 @@
 // g++ --std=c++11 -g -ggdb -I$BOOST_ROOT/include -o test_runtime_container test_runtime_container.cxx
 
 #include <iostream>
+#include <memory>
 #include <boost/mpl/size.hpp>
 #include <boost/mpl/apply.hpp>
 #include <boost/mpl/int.hpp>
@@ -106,4 +107,8 @@ int main()
     std::cout << "reading container at level " << i << ": "
 	      <<container.apply(i, get_value<float>()) << std::endl;
   }
+
+  std::cout << std::endl << "testing cloning using copy constructor" << std::endl;
+  std::unique_ptr<Container_t> clone(new Container_t(container));
+  clone->print();
 }
