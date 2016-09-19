@@ -126,6 +126,26 @@ private:
 };
 
 /**
+ * @brief Adder functor
+ */
+template<typename U>
+class add_value {
+public:
+  typedef void return_type;
+  typedef U value_type;
+
+  add_value(U u) : mValue(u) {}
+  template<typename T>
+  return_type operator()(T& t) {
+    t += mValue;
+  }
+
+private:
+  add_value(); // forbidden
+  U mValue;
+};
+
+/**
  * @brief Getter functor, forwards to the container mixin's get function
  */
 template<typename U>
@@ -271,6 +291,10 @@ struct rc_mixin : public BASE
   void set(wrapped_type v) {mMember = v;}
   /// get wrapped object
   wrapped_type get() const {return mMember;}
+  /// operator
+  wrapped_type& operator+=(const wrapped_type& v) {mMember += v; return mMember;}
+  /// operator
+  wrapped_type operator+(const wrapped_type& v) {return mMember + v;}
 
   /// apply functor to the runtime object at index
   template<typename F>
