@@ -28,6 +28,7 @@
 #include <iostream>
 #include <iomanip>
 #include <boost/mpl/equal.hpp>
+#include <boost/mpl/minus.hpp>
 #include <boost/mpl/fold.hpp>
 #include <boost/mpl/lambda.hpp>
 #include <boost/mpl/vector.hpp>
@@ -117,7 +118,7 @@ public:
   set_value(U u) : mValue(u) {}
   template<typename T>
   return_type operator()(T& t) {
-    return t.set(mValue);
+    t = mValue;
   }
 
 private:
@@ -147,16 +148,46 @@ private:
 
 /**
  * @brief Getter functor, forwards to the container mixin's get function
+ *
+ * TODO: make a type trait to either return t.get() if its a container
+ * instance or t directly if it is the member object
  */
 template<typename U>
 class get_value {
 public:
   typedef U return_type;
   typedef U value_type;
+  class NullType {};
+private:
+  /* could not solve the problem that one has to instantiate Traits
+     with a fixed number of template arguments where wrapped_type
+     would need to be provided already to go into the specialization
+  template<typename InstanceType, typename Dummy = InstanceType>
+  struct Traits {
+    typedef NullType container_type;
+    typedef InstanceType type;
+    static return_type apply(InstanceType& c) {
+      std::cout << "Traits";
+      return c;
+    }
+  };
+  // specialization for container instances
+  template<typename InstanceType>
+  struct Traits<InstanceType, typename InstanceType::wrapped_type> {
+    typedef InstanceType container_type;
+    typedef typename InstanceType::wrapped_type type;
+    static return_type apply(InstanceType& c) {
+      std::cout << "specialized Traits";
+      return c.get();
+    }
+  };
+  */
 
+public:
   template<typename T>
   return_type operator()(T& t) {
     return t.get();
+    //return (typename Traits<T>::type)(t);
   }
 };
 
@@ -270,8 +301,9 @@ struct RuntimeContainer : public InterfacePolicy
  * the character '*'
  */
 template <typename BASE, typename T>
-struct rc_mixin : public BASE
+class rc_mixin : public BASE
 {
+public:
   rc_mixin() : mMember(0) {BASE::_initializer(mMember);}
 
   /// each stage of the mixin class wraps one type
@@ -291,12 +323,47 @@ struct rc_mixin : public BASE
   void set(wrapped_type v) {mMember = v;}
   /// get wrapped object
   wrapped_type get() const {return mMember;}
+  /// get wrapped object reference
+  wrapped_type& operator*() {return mMember;}
+  /// assignment operator to wrapped type
+  wrapped_type& operator=(const wrapped_type& v) {mMember = v; return mMember;}
+  /// type conversion to wrapped type
+  operator wrapped_type() const {return mMember;}
   /// operator
   wrapped_type& operator+=(const wrapped_type& v) {mMember += v; return mMember;}
   /// operator
   wrapped_type operator+(const wrapped_type& v) {return mMember + v;}
 
+  /// a functor wrapper dereferencing the RC container instance
+  template<typename F>
+  class member_apply_at {
+  public:
+    member_apply_at(F& f) : mFunctor(f) {}
+    typedef typename F::return_type return_type;
+    template<typename _T>
+    typename F::return_type operator()(_T& me) {
+      return mFunctor(*me);
+    }
+  private:
+    member_apply_at(); //forbidden
+    F& mFunctor;
+  };
+
   /// apply functor to the runtime object at index
+  /// TODO: there is a performance issue with this solution, introducing another
+  /// level of functors makes the access much slower compared with applying to
+  /// container instance and using container member functions, tested with the
+  /// add_value functor and bench_runtime_container, also the actual operation
+  /// needs to be checked, the result is not correct for the last check of
+  /// 100000000 iterations
+  /*
+  template<typename F>
+  typename F::return_type applyToMember(int index, F f) {
+    return apply(index, member_apply_at<F>(f));
+  }
+  */
+
+  /// apply functor to the runtime container at index
   template<typename F>
   typename F::return_type apply(int index, F f) {
     return rc_apply_at<
@@ -309,6 +376,7 @@ struct rc_mixin : public BASE
       >::apply(*this, index, f);
   }
 
+private:
   T mMember;
 };
 
