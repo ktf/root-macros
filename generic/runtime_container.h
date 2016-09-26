@@ -304,7 +304,7 @@ template <typename BASE, typename T>
 class rc_mixin : public BASE
 {
 public:
-  rc_mixin() : mMember(0) {BASE::_initializer(mMember);}
+  rc_mixin() : mMember() {BASE::_initializer(mMember);}
 
   /// each stage of the mixin class wraps one type
   typedef T wrapped_type;
