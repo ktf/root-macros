@@ -6,6 +6,7 @@
 #include "AliCDBEntry.h"
 #include "TObject.h"
 #include "TFile.h"
+#include "TStopwatch.h"
 #include <iostream>
 #include <fstream>
 
@@ -212,7 +213,7 @@ int benchClusterCompression(RawClusterArray& ca, AliHLTDataDeflater* pDeflater)
     unsigned int parameterID = 0;
     pDeflater->InitBitDataOutput(reinterpret_cast<unsigned char*>(dummybuffer), sizeof(dummybuffer));
     uint16_t padrow = cluster->GetPadRow();
-    unsigned long long int padrowValue = padrow - lastPadrow;
+    unsigned long long int value = padrow - lastPadrow;
     lastPadrow = padrow;
     pDeflater->OutputParameterBits(parameterID++, value);
     float padval = cluster->GetPad() * 60;
@@ -241,19 +242,30 @@ int benchClusterCompression(RawClusterArray& ca, AliHLTDataDeflater* pDeflater)
   if (ca.GetNClusters() > 0)
     std::cout << " " << (nBits+7)/8 << " byte(s) " << float(nBits)/(77 * ca.GetNClusters());
   std::cout << std::endl;
-  return 0;
+  return ca.GetNClusters();
 }
 
 int standalone_tpc_cluster_compression(const char* filename = NULL)
 {
   AliHLTDataDeflaterHuffman* pDeflater = createHuffmanDeflater("huffmanConfiguration.root");
-  pDeflater->PrintTable();
+  //pDeflater->PrintTable();
 
-  //TString line;
-  //while (line.ReadLine(cin) && cin.good()) {
-  //  RawClusterArray ca(line.Data());
-  //  benchClusterCompression(ca, pDeflater);
-  //}
+  TStopwatch timer;
+  TString line;
+  int totalNofClusters = 0;
+  int fileCount = 0;
+  while (line.ReadLine(cin) && cin.good()) {
+    RawClusterArray ca(line.Data());
+    timer.Continue();
+    totalNofClusters += benchClusterCompression(ca, pDeflater);
+    timer.Stop();
+    ++fileCount;
+  }
 
+  std::cout << fileCount << " file(s) processed"
+	    << ", " << totalNofClusters << " cluster(s)"
+	    << "  realtime " << timer.RealTime()
+	    << " cputime " << timer.CpuTime()
+	    << std::endl;
   return 0;
 }
