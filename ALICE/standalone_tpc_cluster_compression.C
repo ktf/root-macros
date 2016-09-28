@@ -223,9 +223,11 @@ int benchClusterCompression(RawClusterArray& ca, AliHLTDataDeflater* pDeflater)
     pDeflater->OutputParameterBits(parameterID++, value);
     float sigmaPad2val = cluster->GetSigmaPad2() * 25;
     value = sigmaPad2val;
+    if (value > 255) value = 255;
     pDeflater->OutputParameterBits(parameterID++, value);
     float sigmaTime2val = cluster->GetSigmaTime2() * 10;
     value = sigmaTime2val;
+    if (value > 255) value = 255;
     pDeflater->OutputParameterBits(parameterID++, value);
     value = cluster->GetCharge();
     pDeflater->OutputParameterBits(parameterID++, value);
