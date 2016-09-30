@@ -29,6 +29,7 @@
 #include <iomanip>
 #include <boost/mpl/equal.hpp>
 #include <boost/mpl/minus.hpp>
+#include <boost/mpl/less.hpp>
 #include <boost/mpl/fold.hpp>
 #include <boost/mpl/lambda.hpp>
 #include <boost/mpl/vector.hpp>
@@ -38,6 +39,7 @@
 #include <boost/mpl/end.hpp>
 #include <boost/mpl/next.hpp>
 #include <boost/mpl/deref.hpp>
+#include <boost/mpl/at.hpp>
 
 using namespace boost::mpl::placeholders;
 
@@ -222,7 +224,7 @@ struct rc_apply_at
     } else {
       // go to next element
       return rc_apply_at<
-	_ContainerT
+        _ContainerT
         , _IndexT
         , typename boost::mpl::next< _Iterator >::type
         , _End
@@ -243,18 +245,69 @@ template <
   , typename F          // functor
   >
 struct rc_apply_at<_ContainerT
-		   , _IndexT
-		   , _End
-		   , _End
-		   , _Index
-		   , F
-		   >
+                   , _IndexT
+                   , _End
+                   , _End
+                   , _Index
+                   , F
+                   >
 {
   static typename F::return_type apply( _ContainerT& c, _IndexT position, F f )
   {
-    // TODO: this is probably the place to through an exeption because
+    // TODO: this is probably the place to throw an exeption because
     // we are out of bound
     return typename F::return_type(0);
+  }
+};
+
+/**
+ * Apply functor to the specified container level
+ *
+ * Ignores parameter '_IndexT'
+ */
+template<typename _ContainerT
+         , typename _StageT
+         , typename _IndexT
+         , typename F>
+struct rc_apply {
+  typedef typename _ContainerT::types types;
+  static typename F::return_type apply(_ContainerT& c, _IndexT /*ignored*/, F f)
+  {
+    return f(static_cast<_StageT&>(c));
+  }
+};
+
+/**
+ * Generalized dispatcher with the ability for code unrolling
+ *
+ * The optional template parameter 'Position' can be used to cast directly to
+ * the specified level in the runtime container and apply the functor without
+ * the recursive loop. The template call with default parameters forwards to
+ * the recursive call because 'Position' is set to out of list range.
+ */
+template<typename _ContainerT
+         , typename F
+         , typename Position = boost::mpl::size<typename _ContainerT::types>
+         , typename _IndexT = int
+         >
+struct rc_dispatcher {
+  typedef typename _ContainerT::types types;
+  typedef typename boost::mpl::if_<
+    boost::mpl::less<Position,  boost::mpl::size<types> >
+    , rc_apply<_ContainerT, typename boost::mpl::at<types, Position>::type, _IndexT, F>
+    , rc_apply_at<
+      _ContainerT
+      , _IndexT
+      , typename boost::mpl::begin<types>::type
+      , typename boost::mpl::end<types>::type
+      , 0
+      , F
+      >
+    >::type type;
+
+  static typename F::return_type apply(_ContainerT& c, _IndexT position, F f) {
+    type dispatcher;
+    return dispatcher.apply(c, position, f);
   }
 };
 
@@ -363,17 +416,40 @@ public:
   }
   */
 
-  /// apply functor to the runtime container at index
-  template<typename F>
+  /*
+   * Apply a functor to the runtime container at index
+   *
+   * For performance tests there is a template option to do an explicite loop
+   * unrolling for the first n (=10) elements. This is however only effective
+   * if the compiler optimization is switched of. This is  in the end a nice
+   * demonstrator for the potential of compiler optimization. Unrolling is
+   * switched on with the compile time switch RC_UNROLL.
+   */
+  template<typename F
+#ifdef RC_UNROLL
+           , bool unroll = true
+#else
+           , bool unroll = false
+#endif
+           >
   typename F::return_type apply(int index, F f) {
-    return rc_apply_at<
-      mixin_type
-      , int
-      , typename boost::mpl::begin<types>::type
-      , typename boost::mpl::end<types>::type
-      , 0
-      , F
-      >::apply(*this, index, f);
+    if (unroll) {
+      // do unrolling for the first n elements and forward to generic
+      // recursive function for the rest.
+      switch (index) {
+      case 0: return rc_dispatcher<mixin_type, F, boost::mpl::int_<0>, int>::apply(*this, 0, f);
+      case 1: return rc_dispatcher<mixin_type, F, boost::mpl::int_<1>, int>::apply(*this, 1, f);
+      case 2: return rc_dispatcher<mixin_type, F, boost::mpl::int_<2>, int>::apply(*this, 2, f);
+      case 3: return rc_dispatcher<mixin_type, F, boost::mpl::int_<3>, int>::apply(*this, 3, f);
+      case 4: return rc_dispatcher<mixin_type, F, boost::mpl::int_<4>, int>::apply(*this, 4, f);
+      case 5: return rc_dispatcher<mixin_type, F, boost::mpl::int_<5>, int>::apply(*this, 5, f);
+      case 6: return rc_dispatcher<mixin_type, F, boost::mpl::int_<6>, int>::apply(*this, 6, f);
+      case 7: return rc_dispatcher<mixin_type, F, boost::mpl::int_<7>, int>::apply(*this, 7, f);
+      case 8: return rc_dispatcher<mixin_type, F, boost::mpl::int_<8>, int>::apply(*this, 8, f);
+      case 9: return rc_dispatcher<mixin_type, F, boost::mpl::int_<9>, int>::apply(*this, 9, f);
+      }
+    }
+    return rc_dispatcher<mixin_type, F>::apply(*this, index, f);
   }
 
 private:
