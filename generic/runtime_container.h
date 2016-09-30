@@ -211,7 +211,7 @@ template <
   >
 struct rc_apply_at
 {
-  static typename F::return_type apply( _ContainerT& c, _IndexT position, F f )
+  static typename F::return_type apply( _ContainerT& c, _IndexT position, F& f )
   {
     if ( position == _Index ) {
       // this is the queried position, make the type cast to the current
@@ -252,7 +252,7 @@ struct rc_apply_at<_ContainerT
                    , F
                    >
 {
-  static typename F::return_type apply( _ContainerT& c, _IndexT position, F f )
+  static typename F::return_type apply( _ContainerT& c, _IndexT position, F& f )
   {
     // TODO: this is probably the place to throw an exeption because
     // we are out of bound
@@ -271,7 +271,7 @@ template<typename _ContainerT
          , typename F>
 struct rc_apply {
   typedef typename _ContainerT::types types;
-  static typename F::return_type apply(_ContainerT& c, _IndexT /*ignored*/, F f)
+  static typename F::return_type apply(_ContainerT& c, _IndexT /*ignored*/, F& f)
   {
     return f(static_cast<_StageT&>(c));
   }
@@ -305,9 +305,8 @@ struct rc_dispatcher {
       >
     >::type type;
 
-  static typename F::return_type apply(_ContainerT& c, _IndexT position, F f) {
-    type dispatcher;
-    return dispatcher.apply(c, position, f);
+  static typename F::return_type apply(_ContainerT& c, _IndexT position, F& f) {
+    return type::apply(c, position, f);
   }
 };
 
