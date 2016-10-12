@@ -51,6 +51,11 @@ using namespace boost::mpl::placeholders;
  * points to the different levels of the mixin, none of the interface
  * functions has to be declared virtual. The function implementation of
  * the top most mixin would be called otherwise.
+ *
+ * The mixin technique requires a base class, but it mostly makes sense in
+ * the picture of runtime polymorphism and virtual interfaces. The runtime
+ * container application is purely using static polymorphism which makes the
+ * base interface just to a technical aspect.
  */
 class DefaultInterface
 {
@@ -79,6 +84,8 @@ struct default_initializer
  * - integral types truncate the fraction
  * - unsigned types undergo an underflow and produce big numbers
  * - 8 bit char produces the '*' character
+ *
+ * Mainly for testing and illustration purposes.
  */
 struct funny_initializer
 {
@@ -92,21 +99,36 @@ struct funny_initializer
 struct default_printer
 {
   template<typename T>
-  void operator()(const T& v, int level = -1) {}
+  bool operator()(const T& v, int level = -1) {return false;}
 };
 
 /**
  * @brief Verbose printer prints level and content
  */
-struct verbose_printer
+template<bool recursive = true>
+struct verbose_printer_base
 {
   template<typename T>
-  void operator()(const T& v, int level = -1) {
+  bool operator()(const T& v, int level = -1) {
     std::cout << "RC mixin level "
               << std::setw(2)
               << level << ": " << v << std::endl;
+    return recursive;
   }
 };
+
+/**
+ * @brief Verbose printer to print levels recursively
+ */
+struct recursive_printer : verbose_printer_base<true> {};
+
+// preserve backward compatibility
+typedef recursive_printer verbose_printer;
+
+/**
+ * @brief Verbose printer to print a single level
+ */
+struct single_printer : verbose_printer_base<false> {};
 
 /**
  * @brief Setter functor, forwards to the container mixin's set function
@@ -346,11 +368,12 @@ struct RuntimeContainer : public InterfacePolicy
  * @class rc_mixin Components for the mixin class
  * @brief Mixin component is used with different data types
  *
- * Each mixin component has a member of the specified type, as a simple
- * trick this member is initialized with 0 and then a negative float number
- * is subtracted. The fraction will be cut off for integral types, for
- * unsigned numbers there will be range wrap. For an 8 bit char it gives
- * the character '*'
+ * Each mixin component has a member of the specified type. The container
+ * level exports the following data types to the outside:
+ * - wrapped_type    the data type at this level
+ * - mixin_type      composed type at this level
+ * - types           mpl sequence containing all level types
+ * - level           a data type containing the level
  */
 template <typename BASE, typename T>
 class rc_mixin : public BASE
@@ -367,8 +390,11 @@ public:
   /// increment the level counter
   typedef typename boost::mpl::plus< typename BASE::level, boost::mpl::int_<1> >::type level;
   void print() {
-    BASE::_printer(mMember, level::value);
-    BASE::print();
+    // use the printer policy of this level, the policy returns
+    // a bool determining whether to call the underlying level
+    if (BASE::_printer(mMember, level::value)) {
+      BASE::print();
+    }
   }
 
   /// set member wrapped object
@@ -387,6 +413,8 @@ public:
   wrapped_type operator+(const wrapped_type& v) {return mMember + v;}
 
   /// a functor wrapper dereferencing the RC container instance
+  /// the idea is to use this extra wrapper to apply the functor directly to
+  /// the wrapped type, see the comment below
   template<typename F>
   class member_apply_at {
   public:
@@ -432,7 +460,7 @@ public:
 #endif
            >
   typename F::return_type apply(int index, F f) {
-    if (unroll) {
+    if (unroll) {// this is a compile time switch
       // do unrolling for the first n elements and forward to generic
       // recursive function for the rest.
       switch (index) {
@@ -455,6 +483,11 @@ private:
   T mMember;
 };
 
+/**
+ * @brief Applying rc_mixin with the template parameters as placeholders
+ * The wrapping into an mpl lambda is necessary to separate placeholder scopes
+ * in the mpl fold operation.
+ */
 typedef typename boost::mpl::lambda< rc_mixin<_1, _2> >::type apply_rc_mixin;
 
 /**
@@ -469,28 +502,45 @@ template< typename T, typename N > struct rtc_equal
 : boost::mpl::bool_<boost::mpl::equal<typename T::wrapped_type, N>::type> {};
 
 /**
- * @brief create the runtime container
+ * @brief create the runtime container type
+ * The runtime container type is build from a list of data types, the recursive
+ * build can be optionally stopped at the level of argument N.
  *
- * Usage: typedef create_rtc<types, base>::type container;
+ * Usage: typedef create_rtc<types, base>::type container_type;
  */
 template<typename Types, typename Base, typename N = boost::mpl::size<Types>>
 struct  create_rtc
 {
   typedef typename boost::mpl::lambda<
-  typename boost::mpl::fold<
-  Types
-  , Base
-  , boost::mpl::if_<
-      rtc_less<_1, N >
-      , boost::mpl::apply2< boost::mpl::protect<apply_rc_mixin>::type, _1, _2 >
-      , boost::mpl::identity<_1>
-      >
-    >::type
-  >::type type;
+    // mpl fold loops over all elements in the list of the first template
+    // parameter and provides this as placeholder _2; for every element the
+    // operation of the third template parameter is applied to the result of
+    // the previous stage which is provided as placeholder _1 to the operation
+    // and initialized to the second template argument for the very first
+    // operation
+    typename boost::mpl::fold<
+      // list of types, each element provided as placeholder _1
+      Types
+      // initializer for the _1 placeholder
+      , Base
+      // recursively applied operation, depending on the outcome of rtc_less
+      // either the next mixin level is applied or the current state is used
+      , boost::mpl::if_<
+          rtc_less<_1, N >
+          // apply mixin level
+          , boost::mpl::apply2< boost::mpl::protect<apply_rc_mixin>::type, _1, _2 >
+          // keep current state by identity
+          , boost::mpl::identity<_1>
+          >
+      >::type
+    >::type type;
 };
 
 /**
- * @brief create a vector of mixin types
+ * @brief create an mpl vector of mixin types
+ * Every stage in the runtime container contains all the previous ones.
+ * The resulting mpl vector of this meta function contains all individual
+ * stages.
  *
  * Usage: typedef create_rtc_types<types, base>::type container_types;
  */
