@@ -40,6 +40,8 @@
 #include <boost/mpl/next.hpp>
 #include <boost/mpl/deref.hpp>
 #include <boost/mpl/at.hpp>
+#include <boost/mpl/range_c.hpp>
+#include <boost/mpl/size.hpp>
 
 using namespace boost::mpl::placeholders;
 
@@ -142,7 +144,7 @@ public:
   set_value(U u) : mValue(u) {}
   template<typename T>
   return_type operator()(T& t) {
-    t = mValue;
+    *t = mValue;
   }
 
 private:
@@ -162,7 +164,7 @@ public:
   add_value(U u) : mValue(u) {}
   template<typename T>
   return_type operator()(T& t) {
-    t += mValue;
+    *t += mValue;
   }
 
 private:
@@ -352,6 +354,9 @@ struct RuntimeContainer : public InterfacePolicy
   typedef boost::mpl::int_<-1> level;
   typedef boost::mpl::vector<>::type  types;
 
+  /// get size which is 0 at this level
+  constexpr std::size_t size() const {return 0;}
+
   void print() {
     const char* string = "base";
     _printer(string, level::value);
@@ -397,6 +402,8 @@ public:
     }
   }
 
+  /// get size at this stage
+  constexpr std::size_t size() const {return level::value + 1;}
   /// set member wrapped object
   void set(wrapped_type v) {mMember = v;}
   /// get wrapped object
