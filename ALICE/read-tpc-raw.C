@@ -59,7 +59,7 @@ void read_tpc_raw()
 {
   ////////////////////////////////////////////////////////////////////////////////
   // macro configuration area
-  const int maxEvent=-1;
+  const int maxEvent=10;
 
   // signal bit length
   const int signalBitLength=10;
@@ -74,7 +74,7 @@ void read_tpc_raw()
   htfn+="_HuffmanTable.root";
 
   // run huffman training to produce the huffman table
-  const bool bRunHuffmanTraining=false;
+  const bool bRunHuffmanTraining=true;
 
   // special mode to encode large differences
   // a cutoff parameter determines if large differences are encoded with only
@@ -155,6 +155,12 @@ void read_tpc_raw()
   hHuffmanCodeLength->GetYaxis()->SetTitle("Huffman code length");
   hHuffmanCodeLength->GetYaxis()->SetTitleOffset(1.4);
 
+
+  //
+  TH1 *hTimingInfo = new TH1I("hTimingInfo", "Timing information as found in the Altro payload", 4000, 1321199087, 1321299087);
+  hTimingInfo->GetXaxis()->SetTitle("Time bin");
+  hTimingInfo->GetYaxis()->SetTitle("Count");
+
   // when storing differences, the actual difference value needs to be shifted
   // by the available value range, thus resulting in 1 bit more to be stored
   AliHLTHuffman* pHuffman=NULL;
@@ -204,6 +210,7 @@ void read_tpc_raw()
     	  cout << "processing file " << line << " event " << eventCount << endl;
     	  altrorawstream->Reset();
 	  altrorawstream->SelectRawData("TPC");
+          cout << "Event timestamp " << rawreader->GetTimestamp() << "\n";
     	  while (altrorawstream->NextDDL()) {
     	    DDLNumber=altrorawstream->GetDDLNumber();
 	    cout << " reading event " << std::setw(4) << eventCount
@@ -223,16 +230,17 @@ void read_tpc_raw()
     	    	  // process all signal values of the bunch and set the
     	    	  // according time bins in the buffer
     	    	  Int_t startTime=altrorawstream->GetStartTimeBin();
+                  hTimingInfo->Fill(startTime + rawreader->GetTimestamp(), 1);
     	    	  Int_t bunchLength=altrorawstream->GetBunchLength();
 		  channelWordCount+=bunchLength + 2; // +2 : bunch length and start time words
     	    	  const UShort_t* signals=altrorawstream->GetSignals();
     	    	  Int_t i=0;
-    	    	  // cout << "reading bunch:"
-    	    	  //      << "  DDL "       << DDLNumber
-    	    	  //      << "  channel "   << HWAddress
-    	    	  //      << "  startTime " << startTime
-    	    	  //      << "  length "    << bunchLength
-    	    	  //      << endl;
+    	    	  //cout << "reading bunch:"
+    	    	  //     << "  DDL "       << DDLNumber
+    	    	  //     << "  channel "   << HWAddress
+    	    	  //     << "  startTime " << startTime
+    	    	  //     << "  length "    << bunchLength
+    	    	  //     << endl;
 		  
     	    	  for (; i<bunchLength; i++) {
 		    int timeBin=startTime-i;
@@ -431,6 +439,7 @@ void read_tpc_raw()
   if (pHuffman)                                   pHuffman->Write();
   if (hSampleChannel)                             hSampleChannel->Write();
   if (hSampleChannelSignalDiff)                   hSampleChannelSignalDiff->Write();
+  if (hTimingInfo)                                hTimingInfo->Write();
 
   of->Close();
 }
